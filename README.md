@@ -83,25 +83,59 @@ npm run build
 
 ## Running
 
+### HTTP mode (default — binds to a port)
+
 ```bash
 node dist/index.js
+# [grok-mcp] HTTP server listening on http://0.0.0.0:8083
+# [grok-mcp]   MCP    → http://0.0.0.0:8083/mcp
+# [grok-mcp]   Health → http://0.0.0.0:8083/health
 ```
 
-The server communicates over stdio using the MCP protocol.
+Override the port or bind address with environment variables:
+
+```bash
+PORT=9000 HOST=127.0.0.1 node dist/index.js
+```
+
+### Stdio mode (MCP client spawns the process directly)
+
+```bash
+node dist/index.js --stdio
+```
 
 ## MCP Client Configuration
 
-Add to your MCP client config (e.g. `~/.claude/claude_desktop_config.json`):
+### HTTP (remote VM over the network)
+
+```json
+{
+  "mcpServers": {
+    "grok-mcp": {
+      "url": "http://your-vm-ip:8083/mcp"
+    }
+  }
+}
+```
+
+### Stdio (local process)
 
 ```json
 {
   "mcpServers": {
     "grok-mcp": {
       "command": "node",
-      "args": ["/path/to/grok-mcp/dist/index.js"]
+      "args": ["/path/to/grok-mcp/dist/index.js", "--stdio"]
     }
   }
 }
+```
+
+### Health check
+
+```bash
+curl http://your-vm-ip:8083/health
+# {"status":"ok","active_sessions":0}
 ```
 
 ## Background Process Pattern
