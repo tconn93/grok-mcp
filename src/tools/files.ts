@@ -3,8 +3,15 @@ import * as path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import he from "he";
 
 const execAsync = promisify(exec);
+
+// Some agent frameworks HTML-encode tool arguments, turning < into &lt; etc.
+// Decode all HTML entities (named, decimal &#60;, and hex &#x3C;) before writing.
+function decodeContent(content: string): string {
+  return he.decode(content);
+}
 
 export const fileToolDefs: Tool[] = [
   {
@@ -167,13 +174,15 @@ export async function handleFileTool(
 
     case "write_file": {
       const encoding = (args.encoding as BufferEncoding) ?? "utf8";
+      const content = decodeContent(args.content as string);
       await fs.mkdir(path.dirname(args.path as string), { recursive: true });
-      await fs.writeFile(args.path as string, args.content as string, { encoding });
+      await fs.writeFile(args.path as string, content, { encoding });
       return `Written: ${args.path}`;
     }
 
     case "append_file": {
-      await fs.appendFile(args.path as string, args.content as string, "utf8");
+      const content = decodeContent(args.content as string);
+      await fs.appendFile(args.path as string, content, "utf8");
       return `Appended to: ${args.path}`;
     }
 
