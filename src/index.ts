@@ -4,7 +4,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import http from "http";
 import { randomUUID } from "crypto";
-import { authorised, handleMetadata, handleAuthorize, handleToken, handleRevoke } from "./auth.js";
+import { authorised, handleMetadata } from "./auth.js";
 
 import { fileToolDefs, handleFileTool } from "./tools/files.js";
 import { shellToolDefs, handleShellTool } from "./tools/shell.js";
@@ -94,24 +94,6 @@ if (useStdio) {
       return;
     }
 
-    // ── OAuth authorize ───────────────────────────────────────────────────────
-    if (req.url?.startsWith("/authorize") && req.method === "GET") {
-      handleAuthorize(req, res);
-      return;
-    }
-
-    // ── OAuth token ───────────────────────────────────────────────────────────
-    if (req.url === "/token" && req.method === "POST") {
-      await handleToken(req, res);
-      return;
-    }
-
-    // ── OAuth revoke ──────────────────────────────────────────────────────────
-    if (req.url === "/revoke" && req.method === "POST") {
-      await handleRevoke(req, res);
-      return;
-    }
-
     // ── Health check ──────────────────────────────────────────────────────────
     if (req.url === "/health" && req.method === "GET") {
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -121,7 +103,7 @@ if (useStdio) {
 
     // ── MCP endpoint ──────────────────────────────────────────────────────────
     if (req.url === "/mcp") {
-      if (!authorised(req)) {
+      if (!(await authorised(req))) {
         res.writeHead(401, { "Content-Type": "application/json", "WWW-Authenticate": "Bearer" });
         res.end(JSON.stringify({ error: "unauthorized" }));
         return;
