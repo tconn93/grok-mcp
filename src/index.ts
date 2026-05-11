@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import http from "http";
 import { randomUUID } from "crypto";
+import { authorised, handleMetadata, handleAuthorize, handleToken, handleRevoke } from "./auth.js";
 
 import { fileToolDefs, handleFileTool } from "./tools/files.js";
 import { shellToolDefs, handleShellTool } from "./tools/shell.js";
@@ -77,11 +78,37 @@ if (useStdio) {
     // CORS — allow connections from any origin (tighten if needed)
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, Authorization");
 
     if (req.method === "OPTIONS") {
       res.writeHead(204);
       res.end();
+      return;
+    }
+
+    // ── OAuth metadata discovery ──────────────────────────────────────────────
+    if (req.url === "/.well-known/oauth-authorization-server" && req.method === "GET") {
+      const proto = (req.headers["x-forwarded-proto"] as string) ?? "http";
+      const host  = req.headers.host ?? `localhost:${PORT}`;
+      handleMetadata(req, res, `${proto}://${host}`);
+      return;
+    }
+
+    // ── OAuth authorize ───────────────────────────────────────────────────────
+    if (req.url?.startsWith("/authorize") && req.method === "GET") {
+      handleAuthorize(req, res);
+      return;
+    }
+
+    // ── OAuth token ───────────────────────────────────────────────────────────
+    if (req.url === "/token" && req.method === "POST") {
+      await handleToken(req, res);
+      return;
+    }
+
+    // ── OAuth revoke ──────────────────────────────────────────────────────────
+    if (req.url === "/revoke" && req.method === "POST") {
+      await handleRevoke(req, res);
       return;
     }
 
@@ -94,6 +121,11 @@ if (useStdio) {
 
     // ── MCP endpoint ──────────────────────────────────────────────────────────
     if (req.url === "/mcp") {
+      if (!authorised(req)) {
+        res.writeHead(401, { "Content-Type": "application/json", "WWW-Authenticate": "Bearer" });
+        res.end(JSON.stringify({ error: "unauthorized" }));
+        return;
+      }
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
       // Existing session: route to the right transport
